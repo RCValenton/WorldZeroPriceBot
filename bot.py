@@ -97,6 +97,12 @@ async def on_message(message):
                     await message.channel.send("The value list has been updated.")
                 except Exception as e:
                     await message.channel.send(f"Error processing the CSV file: {e}")
+
+                # Delete the file after processing
+                try:
+                    os.remove(file_path)  # Deletes the file after saving
+                except OSError as e:
+                    await message.channel.send(f"Error deleting the file: {e}")
             else:
                 await message.channel.send("Please upload a valid .txt or .csv file.")
         else:
@@ -114,16 +120,21 @@ async def add(ctx, item: str, *, price: str):
     save_prices()  # Save the updated prices
     await ctx.send(f"Added {item} with price {price}.")
 
-# Prefix command to retrieve the price of an item
+# Prefix command to retrieve all matching items and their prices
 @bot.command()
 async def value(ctx, *, item: str):
-    # Strip quotes if they are present
+    # Normalize the input by stripping quotes and converting to lowercase
     item = item.lower().strip().strip('"').strip("'")
-    
-    if item in item_prices:
-        await ctx.send(f"The price of {item} is {item_prices[item]}.")
+
+    # Search for all matching items containing the input
+    matching_items = {k: v for k, v in item_prices.items() if item in k.lower()}
+
+    if matching_items:
+        # Format the response with all matching items and their prices
+        response = "\n".join([f"{k}: {v}" for k, v in matching_items.items()])
+        await ctx.send(f"Here are all the items containing '{item}':\n{response}")
     else:
-        await ctx.send(f"Sorry, I don't have the price for {item}.")
+        await ctx.send(f"Sorry, no items found containing '{item}'.")
 
 # Get the bot token from the environment variables
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
