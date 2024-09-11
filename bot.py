@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 import json
 import os
+import re
 import pandas as pd
 from dotenv import load_dotenv
 
@@ -137,6 +138,75 @@ async def help_command(ctx):
         embed.add_field(name=f"!{command.name}", value=command.description, inline=False)
 
     await ctx.send(embed=embed)
+
+# Helper function to convert string prices like '100k', '800m' to integer values
+def convert_price_to_number(price_str):
+    price_str = price_str.lower().replace(',', '').replace('+', '').replace('-', '')  # Normalize and remove commas, +, -
+    
+    # For ranges like "600m-1b" or "5/10m-", pick the lower end of the range
+    if '/' in price_str:
+        price_str = price_str.split('/')[0]  # Take the first part as the price
+    
+    # Match numbers optionally followed by k (thousands), m (millions), or b (billions)
+    match = re.match(r'^(\d+(\.\d+)?)([kmb])?$', price_str)
+    if match:
+        number = float(match.group(1))
+        if match.group(3) == 'k':
+            return int(number * 1000)
+        elif match.group(3) == 'm':
+            return int(number * 1000000)
+        elif match.group(3) == 'b':  # New handling for billions
+            return int(number * 1000000000)
+        else:
+            return int(number)  # No suffix, just a number
+    return None  # Return None if the price format is invalid
+
+# Function to split the response into chunks of up to 2000 characters
+def split_message(content, max_length=2000):
+    current_chunk = []
+    chunks = []
+    current_length = 0
+
+    for item in content:
+        item_str = f"{item[0]}: {item[1]} | "  # Format each item as "item: price |"
+        if current_length + len(item_str) > max_length:
+            chunks.append(''.join(current_chunk))
+            current_chunk = []
+            current_length = 0
+
+        current_chunk.append(item_str)
+        current_length += len(item_str)
+
+    # Add the last chunk
+    if current_chunk:
+        chunks.append(''.join(current_chunk))
+
+    return chunks
+
+# Command to list items within the user's budget
+@bot.command(description="List items you can afford based on your gold budget")
+async def budget(ctx, *, gold: str):
+    user_gold = convert_price_to_number(gold)
+
+    if user_gold is None:
+        await ctx.send("Invalid gold amount. Please use formats like '100k', '500m', or '200'.")
+        return
+
+    # Filter items that are affordable within the budget
+    affordable_items = [
+        (item, price) for item, price in item_prices.items()
+        if convert_price_to_number(price) is not None and convert_price_to_number(price) <= user_gold
+    ]
+
+    if affordable_items:
+        # Create the side-by-side response
+        chunks = split_message(affordable_items)
+        
+        # Send each chunk as a separate message
+        for chunk in chunks:
+            await ctx.send(chunk)
+    else:
+        await ctx.send(f"No items found within your budget of {gold}.")
 
 # Start the bot using the token from environment variables
 TOKEN = os.getenv("DISCORD_BOT_TOKEN")
