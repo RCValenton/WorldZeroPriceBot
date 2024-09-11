@@ -192,11 +192,14 @@ async def budget(ctx, *, gold: str):
         await ctx.send("Invalid gold amount. Please use formats like '100k', '500m', or '200'.")
         return
 
-    # Filter items that are affordable within the budget
+    # Filter and sort items that are affordable within the budget
     affordable_items = [
         (item, price) for item, price in item_prices.items()
         if convert_price_to_number(price) is not None and convert_price_to_number(price) <= user_gold
     ]
+
+    # Sort by price in descending order (from most expensive to least expensive)
+    affordable_items.sort(key=lambda x: convert_price_to_number(x[1]), reverse=True)
 
     if affordable_items:
         # Create the side-by-side response
